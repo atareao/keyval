@@ -1,0 +1,57 @@
+#!/usr/bin/with-contenv sh
+
+set -e # Exit immediately if a command exits with a non-zero status.
+set -u # Treat unset variables as an error.
+
+dbFile="/app/database/expulsabot.db"
+
+# Setup user/group ids
+setupIDs() {
+  if [ -n "${USER_UID}" ]; then
+    if [ ! "$(id -u user)" -eq "${USER_UID}" ]; then
+      
+      # usermod likes to chown the home directory, so create a new one and use that
+      # However, if the new UID is 0, we can't set the home dir back because the
+      # UID of 0 is already in use (executing this script).
+      if [ ! "${USER_UID}" -eq 0 ]; then
+        mkdir /tmp/temphome
+        usermod -d /tmp/temphome user
+      fi
+      
+      # Change the UID
+      usermod -o -u "${USER_UID}" user
+      
+      # Cleanup the temp home dir
+      if [ ! "${USER_UID}" -eq 0 ]; then
+        usermod -d /app user
+        rm -Rf /tmp/temphome
+      fi
+    fi
+  fi
+
+  if [ ! -z "${USER_GID}" ]; then
+    echo "Hay USER_GID definido"
+    if [ ! "$(id -g user)" -eq "${USER_GID}" ]; then
+      echo "Aplicando el USER_GID al usuario user"
+      groupmod -o -g "${USER_GID}" user
+    fi
+  fi    
+}
+
+echo "EJECUTANDO EL SCRIPT DE INICIO"
+
+# If the first run completed successfully, we are done
+if [ -f "${dbFile}" ]; then
+  echo "Comprobando que hay una BBDD... OK"
+  if [ "$(stat -c %u "${dbFile}")" = "$(id -u user)" ]; then
+    echo "Comprobando que la BBDD es del usuario user... OK"
+    exit 0
+  fi
+  echo "La BBDD pero no es de user, cambiando propiedad..."
+  chown -R user:user /app
+else
+  echo "No hay BBDD, procediendo a inicializar la aplicación..."
+  setupIDs
+  python3 /app/init.py
+  chown -R user:user /app
+fi

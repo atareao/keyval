@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv sh
+
+echo "Starting Python App"
+exec s6-setuidgid user /bin/sh -c 'python -u /app/server.py'

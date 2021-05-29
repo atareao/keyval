@@ -1,0 +1,4 @@
+server = "0.0.0.0"
+port = "5000"
+endpoint = "066e74d9-0555-4ac0-8d06-344e2ba75b07"
+tokens = ["7c7848c1-e5de-43ef-98d2-9a752ba4efd2",]

@@ -1,0 +1,7 @@
+version: '3'
+services:
+  keyval:
+    build: ./
+    container_name: keyval
+    restart: unless-stopped
+
