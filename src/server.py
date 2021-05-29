@@ -29,11 +29,12 @@ from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.routing import Route
 from starlette.endpoints import HTTPEndpoint
-from starlette.responses import PlainTextResponse, HTMLResponse
+from starlette.responses import PlainTextResponse, HTMLResponse, JSONResponse
 
 
 DATABASE = '/app/db/keyval.db'
 CONFIG = '/app/config/keyval.toml'
+HTML_404_PAGE = "<!doctype html><html><body><p>404 Not Found</p></body></html>"
 HTML_403_PAGE = "<!doctype html><html><body><p>403 Forbidden</p></body></html>"
 DATA  = toml.load(CONFIG)
 ENDPOINTS = DATA['endpoint']
@@ -42,38 +43,49 @@ SERVER = DATA['server']
 PORT = DATA['port']
 
 
-routes = [
-        Route("/api/1.0/{endpoint}/{key}", KeyValAPI),
-]
-
-
-async def forbidden(request, exc):
-    return HTMLResponse(content=HTML_403_PAGE, status_code=exc.status_code)
-
-
 class KeyValAPI(HTTPEndpoint):
 
     async def get(self, request):
         endpoint = request.path_params['endpoint']
         key = request.path_params['key']
-        token = request.headers['Token']
-        if endpoint in ENDPOINTS and token in TOKENS:
+        if 'Token' in request.headers and request.headers['Token'] in TOKENS \
+                and endpoint in ENDPOINTS:
             keyVal = KeyVal(DATABASE)
             result = keyVal.get(key)
-            return PlainTextResponse(result)
+            return JSONResponse({'value': result})
         return HTMLResponse(content=HTML_403_PAGE, status_code=403)
 
     async def post(self, request):
         endpoint = request.path_params['endpoint']
         key = request.path_params['key']
-        token = request.headers['Token']
-        if endpoint in ENDPOINTS and token in TOKENS:
-            keyVal = KeyVal(DATABASE)
-            result = keyVal.get(key)
-            return PlainTextResponse(result)
+        if 'Token' in request.headers and request.headers['Token'] in TOKENS \
+                and endpoint in ENDPOINTS:
+            data = await request.json()
+            if 'value' in data:
+                keyVal = KeyVal(DATABASE)
+                keyVal.set(key, data['value'])
+                result = keyVal.get(key)
+                return JSONResponse({'value': result})
         return HTMLResponse(content=HTML_403_PAGE, status_code=403)
+
+
+routes = [
+        Route("/api/1.0/{endpoint}/{key}", KeyValAPI),
+]
+
+async def not_found(request, exc):
+    return HTMLResponse(content=HTML_404_PAGE, status_code=exc.status_code)
+
+async def forbidden(request, exc):
+    return HTMLResponse(content=HTML_403_PAGE, status_code=exc.status_code)
+
+exception_handlers = {
+        404: not_found,
+        403: forbidden
+}
 
 
 if __name__ == '__main__':
     keyVal = KeyVal(DATABASE)
-    app = Starlette(routes=routes)
+    app = Starlette(routes=routes, exception_handlers=exception_handlers)
+    uvicorn.run(app, host=SERVER, port=int(PORT))
